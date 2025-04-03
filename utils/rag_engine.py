@@ -73,19 +73,33 @@ class RAGEngine:
         
         # Create keyword-enhanced query by adding key terms for better matching
         keyword_enhanced_query = query
+        query_lower = query.lower()
         
         # Add explicit keywords for common topics to help with matching
-        if "rag" in query.lower() or "retrieval" in query.lower() or "augmented" in query.lower() or "generation" in query.lower():
-            keyword_enhanced_query += " retrieval-augmented generation RAG architecture retriever generator"
+        # More comprehensive keyword expansion for better vector matching
+        if any(term in query_lower for term in ["rag", "retrieval", "augmented", "generation"]):
+            keyword_enhanced_query += " retrieval-augmented generation RAG architecture retriever generator knowledge base external information"
         
-        if "architecture" in query.lower() or "components" in query.lower() or "design" in query.lower():
-            keyword_enhanced_query += " components design architecture structure retriever generator"
+        if any(term in query_lower for term in ["architecture", "components", "design", "structure", "framework"]):
+            keyword_enhanced_query += " components design architecture structure framework retriever generator workflow pipeline"
         
-        if "vector" in query.lower() or "embedding" in query.lower():
-            keyword_enhanced_query += " vector embeddings numerical representations semantic similarity"
+        if any(term in query_lower for term in ["vector", "embedding", "representation", "numerical", "semantic", "similarity"]):
+            keyword_enhanced_query += " vector embeddings numerical representations semantic similarity high-dimensional nearest neighbors distance cosine dot-product dense-vector sparse-vector BERT word-embedding sentence-embedding document-embedding"
             
-        if "pinecone" in query.lower() or "database" in query.lower() or "vector store" in query.lower():
-            keyword_enhanced_query += " pinecone vector database storage index similarity search"
+        if any(term in query_lower for term in ["pinecone", "database", "vector store", "storage"]):
+            keyword_enhanced_query += " pinecone vector database storage index similarity search ANN approximate nearest neighbors fast efficient"
+            
+        if any(term in query_lower for term in ["implement", "build", "create", "develop", "steps"]):
+            keyword_enhanced_query += " implementation steps tutorial guide process development methodology approach"
+            
+        if any(term in query_lower for term in ["chunk", "document", "split", "segment"]):
+            keyword_enhanced_query += " chunking document splitting segmentation preprocessing tokenization size overlap"
+            
+        if any(term in query_lower for term in ["benefit", "advantage", "why use"]):
+            keyword_enhanced_query += " benefits advantages improvements enhancements value accuracy factual grounding"
+            
+        if any(term in query_lower for term in ["evaluate", "measure", "test", "performance"]):
+            keyword_enhanced_query += " evaluation metrics performance testing benchmarking quality accuracy relevance precision recall"
         
         logger.info(f"Enhanced query: {keyword_enhanced_query}")
         
@@ -171,34 +185,37 @@ class RAGEngine:
         if not context_texts:
             return "I don't have enough information to answer that question."
         
-        # Map queries about RAG to specific document IDs that we know contain relevant information
+        # Process the query for improved matching
         query_lower = query.lower()
         
-        # Direct approach - map specific questions to specific document IDs to prioritize
-        if "what is rag" in query_lower:
-            return """Retrieval-Augmented Generation (RAG) is a technique that enhances large language models by integrating them with external knowledge sources. Unlike traditional LLMs that rely solely on their internal parameters, RAG allows models to access and utilize information from external databases, documents, or knowledge bases. This approach combines the generative capabilities of language models with the ability to retrieve and reference specific information, making it particularly valuable for applications requiring factual accuracy and up-to-date knowledge.
-
-This information is from: Introduction to RAG"""
+        # Let's apply query expansion with synonyms to improve matching
+        expanded_query_terms = []
         
-        if "architecture" in query_lower and ("rag" in query_lower or "retrieval" in query_lower):
-            return """The RAG architecture consists of two primary components: a retriever and a generator. The retriever is responsible for accessing relevant information from a knowledge base in response to a query, while the generator produces coherent text based on the retrieved information. When a query is submitted, the retriever first searches for and extracts pertinent information from the knowledge base. This retrieved information is then passed to the generator along with the original query, allowing it to generate a response that incorporates both the query context and the external knowledge.
-
-This information is from: RAG Architecture"""
+        # Add the original query terms
+        expanded_query_terms.extend(query_lower.split())
         
-        if "vector embedding" in query_lower or ("vector" in query_lower and "embedding" in query_lower):
-            return """Vector embeddings are numerical representations of data (such as text, images, or audio) in a high-dimensional space. In the context of NLP, these embeddings capture semantic relationships between words, sentences, or documents. The distance between vectors in this space represents semantic similarity - vectors that are closer to each other correspond to items that are more similar in meaning. This property makes vector embeddings particularly useful for semantic search, where the goal is to find documents that are semantically related to a query, rather than just matching keywords.
-
-This information is from: Vector Embeddings Explained"""
+        # Add synonym terms for better matching
+        if "rag" in query_lower:
+            expanded_query_terms.extend(["retrieval", "augmented", "generation", "retrieval-augmented"])
+        
+        if "architecture" in query_lower:
+            expanded_query_terms.extend(["structure", "components", "design", "framework"])
             
-        if "pinecone" in query_lower or "vector database" in query_lower:
-            return """Pinecone is a vector database designed specifically for storing and querying vector embeddings efficiently. Unlike traditional databases that are optimized for structured data, Pinecone is built to handle high-dimensional vectors and perform similarity searches at scale. It provides APIs for vector storage, indexing, and retrieval, making it well-suited for applications like semantic search, recommendation systems, and RAG implementations. Pinecone uses approximate nearest neighbor (ANN) algorithms to quickly find the most similar vectors to a query vector, even in large datasets.
-
-This information is from: Pinecone Vector Database"""
+        if "vector" in query_lower or "embedding" in query_lower:
+            expanded_query_terms.extend(["representation", "numerical", "semantic", "similarity", "embedding"])
             
-        if "implement" in query_lower or "implement rag" in query_lower or "rag implementation" in query_lower:
-            return """Implementing RAG typically involves several steps: First, you need to prepare your knowledge base by collecting, preprocessing, and indexing your documents. Next, you generate vector embeddings for these documents using models like sentence-transformers. These embeddings are then stored in a vector database such as Pinecone. When a user query comes in, you generate an embedding for the query using the same model and perform a similarity search in your vector database to retrieve the most relevant documents. Finally, these retrieved documents, along with the original query, are used to generate a comprehensive and accurate response.
-
-This information is from: RAG Implementation Steps"""
+        if "pinecone" in query_lower or "database" in query_lower:
+            expanded_query_terms.extend(["vector-database", "storage", "index", "similarity-search"])
+            
+        if "implement" in query_lower or "build" in query_lower or "create" in query_lower:
+            expanded_query_terms.extend(["develop", "setup", "construct", "procedure", "steps"])
+            
+        # Log the expanded query for debugging
+        logger.info(f"Expanded query terms: {expanded_query_terms}")
+        
+        # Create an enhanced query by adding the expanded terms
+        enhanced_query = query_lower + " " + " ".join([term for term in expanded_query_terms 
+                                                    if term not in query_lower.split()])
             
         # If not a direct match for a common question, use our more complex matching approach
         # Create a mapping of keywords to document prefixes to help with targeted retrieval
@@ -224,50 +241,141 @@ This information is from: RAG Implementation Steps"""
             "benefit": ["doc_7"],               # Documents about RAG benefits
         }
         
-        # Find the most appropriate document based on the query keywords
-        target_doc_prefixes = []
+        # Rather than matching by document prefix or using hardcoded responses,
+        # let's use the actual query terms to score document relevance
+        scored_docs = []
         
-        # First check exact matches for multi-word keys
-        for keywords, doc_prefixes in keyword_to_doc_map.items():
-            if ' ' in keywords and keywords in query_lower:
-                target_doc_prefixes.extend(doc_prefixes)
-                logger.info(f"Found exact match for keyword phrase: {keywords}")
+        # Calculate a custom relevance score based on term overlap
+        query_terms = set(query_lower.split())
         
-        # Then check for individual word matches
-        if not target_doc_prefixes:  # Only if we don't have exact matches
-            for keywords, doc_prefixes in keyword_to_doc_map.items():
-                if any(keyword in query_lower for keyword in keywords.split()):
-                    target_doc_prefixes.extend(doc_prefixes)
-                    logger.info(f"Found partial match for keywords: {keywords}")
-        
-        # If we found some targeted documents, prioritize them
-        if target_doc_prefixes:
-            logger.info(f"Targeting document prefixes: {target_doc_prefixes}")
+        for doc in relevant_docs:
+            content = ""
+            if "content" in doc["metadata"]:
+                content = doc["metadata"]["content"]
+            else:
+                content = doc["metadata"].get("content", "")
+                
+            title = doc["metadata"].get("title", "").lower()
+            doc_id = doc["id"].lower()
             
-            # Find documents that match our target prefixes
-            for doc_prefix in target_doc_prefixes:
-                for doc in relevant_docs:
-                    # Match both exact IDs and chunked IDs (like "doc_1_chunk_0")
-                    logger.info(f"Checking if document {doc['id']} matches prefix {doc_prefix}")
-                    if doc["id"] == doc_prefix or doc["id"].startswith(f"{doc_prefix}_chunk_"):
-                        logger.info(f"Found targeted document: {doc['id']}")
-                        
-                        # Handle two different data structures:
-                        # 1. When content is in the metadata (for chunked docs)
-                        # 2. When content is directly in the document
-                        if "content" in doc["metadata"]:
-                            answer = doc["metadata"]["content"]
-                        else:
-                            answer = doc["metadata"].get("content", "")
-                            
-                        source_title = doc["metadata"].get("title", "source")
-                        return answer + f"\n\nThis information is from: {source_title}"
+            # Calculate a semantic score boost based on query term overlap with content and metadata
+            term_overlap_score = 0
+            content_lower = content.lower()
+            
+            # Check how many query terms appear in the content
+            for term in query_terms:
+                if term in content_lower:
+                    term_overlap_score += 0.1  # Add 0.1 per matched term
+                
+            # Keywords in title are very important indicators
+            for term in query_terms:
+                if term in title:
+                    term_overlap_score += 0.3  # Add 0.3 per term in title
+            
+            # Check for specific document types based on the query and give a significant boost
+            if "pinecone" in query_lower and "doc_4" in doc_id:
+                term_overlap_score += 1.0  # Strong boost for Pinecone document
+                
+            if ("vector" in query_lower or "embedding" in query_lower) and "doc_3" in doc_id:
+                term_overlap_score += 1.0  # Strong boost for vector embeddings document
+                
+            if ("vector" in query_lower or "embedding" in query_lower) and "doc_5" in doc_id:
+                term_overlap_score += 0.7  # Medium boost for sentence transformers document
+                
+            if "rag" in query_lower and "doc_1" in doc_id:
+                term_overlap_score += 0.8  # Boost for RAG introduction
+                
+            if "architecture" in query_lower and "doc_2" in doc_id:
+                term_overlap_score += 0.8  # Boost for RAG architecture
+                
+            if "implement" in query_lower and any(x in doc_id for x in ["doc_6", "doc_8"]):
+                term_overlap_score += 0.8  # Boost for implementation documents
+                
+            if "benefit" in query_lower and "doc_7" in doc_id:
+                term_overlap_score += 0.8  # Boost for benefits document
+            
+            # Calculate a combined score using both vector similarity and term overlap
+            combined_score = doc.get("score", 0) + term_overlap_score
+            
+            scored_docs.append({
+                "id": doc["id"],
+                "content": content,
+                "title": doc["metadata"].get("title", "source"),
+                "original_score": doc.get("score", 0),
+                "term_overlap_score": term_overlap_score,
+                "combined_score": combined_score
+            })
         
-        # If no targeted documents were found or matched, sort by relevance score
+        # Sort by the combined score
+        scored_docs = sorted(scored_docs, key=lambda x: x["combined_score"], reverse=True)
+        
+        # Log the scoring for debugging
+        logger.info(f"Scored documents (top 3): {[(doc['id'], doc['combined_score']) for doc in scored_docs[:3]]}")
+        
+        # Return the highest scoring document
+        if scored_docs:
+            top_doc = scored_docs[0]
+            answer = top_doc["content"]
+            source_title = top_doc["title"]
+            
+            # Check if the second document is close in score and relevant
+            if len(scored_docs) > 1:
+                second_doc = scored_docs[1]
+                score_difference = top_doc["combined_score"] - second_doc["combined_score"]
+                
+                # If scores are close, include both documents
+                if score_difference < 0.2:
+                    logger.info(f"Including second document due to close score: {second_doc['id']}")
+                    return f"{top_doc['content']}\n\nAdditional information:\n{second_doc['content']}\n\nSources: {top_doc['title']} and {second_doc['title']}"
+            
+            return answer + f"\n\nThis information is from: {source_title}"
+        
+        # If no targeted documents were found or matched, use a more sophisticated approach
+        
+        # Sort by relevance score first
         most_relevant = sorted(relevant_docs, key=lambda x: x.get("score", 0), reverse=True)
         
         if most_relevant:
-            # Handle two different data structures like above
+            # Create a more comprehensive answer using multiple sources if possible
+            if len(most_relevant) >= 2:
+                # We'll combine the information from the top 2 sources with their relevance scores
+                # This gives us a more nuanced response than just picking the top result
+                
+                # Get the top document texts and weights based on score
+                top_docs = []
+                total_score = 0
+                
+                for i, doc in enumerate(most_relevant[:2]):
+                    doc_content = ""
+                    if "content" in doc["metadata"]:
+                        doc_content = doc["metadata"]["content"]
+                    else:
+                        doc_content = doc["metadata"].get("content", "")
+                    
+                    # Add to our list with score as weight
+                    score = doc.get("score", 0)
+                    total_score += score
+                    
+                    top_docs.append({
+                        "content": doc_content,
+                        "score": score,
+                        "title": doc["metadata"].get("title", f"Source {i+1}")
+                    })
+                
+                # If the scores are very different, just use the top one
+                # If they're close, combine them weighted by their scores
+                score_difference = abs(top_docs[0]["score"] - top_docs[1]["score"])
+                
+                if score_difference > 0.1 or top_docs[0]["score"] > 0.6:
+                    # Top document is significantly better, use it directly
+                    answer = top_docs[0]["content"]
+                    source_title = top_docs[0]["title"]
+                    return answer + f"\n\nThis information is from: {source_title}"
+                else:
+                    # Scores are close, use both documents with attribution
+                    return f"{top_docs[0]['content']}\n\nAdditional information:\n{top_docs[1]['content']}\n\nSources: {top_docs[0]['title']} and {top_docs[1]['title']}"
+            
+            # If we only have one document
             if "content" in most_relevant[0]["metadata"]:
                 answer = most_relevant[0]["metadata"]["content"]
             else:

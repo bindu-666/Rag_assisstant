@@ -13,7 +13,7 @@ class Config:
     DEFAULT_PINECONE_API_KEY = "pcsk_3QD2yg_ErC9WPvf686c64wNkqf7hMg8TWjFxS3vXnN2oYEdKtJF3YDFcgrZ2jw88Lbqpuw"  # Your Pinecone API key
     
     # RAG settings
-    TOP_K_RESULTS = 3  # Number of relevant documents to retrieve
+    TOP_K_RESULTS = 6  # Number of relevant documents to retrieve (increased to get more potential matches)
     
     # Data settings
     SAMPLE_DATA_PATH = "data/sample_documents.json"
