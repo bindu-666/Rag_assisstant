@@ -38,6 +38,12 @@ try:
     rag_engine = RAGEngine(embedding_generator, pinecone_manager)
     logger.info("Initialized RAG engine")
     
+    # Even if vector store has data, we still need to fit our TF-IDF model
+    # Extract content from sample data for fitting the model
+    sample_texts = [doc["content"] for doc in sample_data]
+    logger.info(f"Fitting embedding model on {len(sample_texts)} sample texts")
+    embedding_generator.fit_model(sample_texts)
+    
     # Check if vector store has data, if not, initialize with sample data
     if not pinecone_manager.check_index_populated():
         logger.info("Initializing vector store with sample data...")
