@@ -4,13 +4,13 @@ Configuration settings for the RAG application
 
 class Config:
     # Embedding model settings
-    EMBEDDING_MODEL_NAME = "scikit-learn-tfidf-svd"  # Not used with our scikit-learn implementation
-    EMBEDDING_DIMENSION = 100  # Dimension for our TF-IDF + SVD embeddings
+    EMBEDDING_MODEL_NAME = "scikit-learn-tfidf-svd"  # Using scikit-learn implementation
+    EMBEDDING_DIMENSION = 1536  # Dimension for our TF-IDF + SVD embeddings to match Pinecone index
     
-    # Vector store settings (In-memory implementation)
-    PINECONE_ENVIRONMENT = "local"  # Not used with our in-memory implementation
-    PINECONE_INDEX_NAME = "rag-documents"  # Not used with our in-memory implementation
-    DEFAULT_PINECONE_API_KEY = "not-needed"  # Not used with our in-memory implementation
+    # Pinecone settings
+    PINECONE_ENVIRONMENT = "gcp-starter"  # Default Pinecone starter environment
+    PINECONE_INDEX_NAME = "rag-index"  # Your specified index name
+    DEFAULT_PINECONE_API_KEY = "pcsk_3QD2yg_ErC9WPvf686c64wNkqf7hMg8TWjFxS3vXnN2oYEdKtJF3YDFcgrZ2jw88Lbqpuw"  # Your Pinecone API key
     
     # RAG settings
     TOP_K_RESULTS = 3  # Number of relevant documents to retrieve

@@ -34,8 +34,12 @@ class EmbeddingGenerator:
                 max_features=10000,  # Limit features to avoid memory issues
                 stop_words='english'
             )
-            self.svd_model = TruncatedSVD(n_components=self.embedding_dim, random_state=42)
-            logger.info("TF-IDF vectorizer and SVD model initialized successfully")
+            
+            # Use a smaller dimension for SVD (we'll pad later)
+            self.svd_dim = min(100, self.embedding_dim)  # Use a smaller SVD dimension
+            self.svd_model = TruncatedSVD(n_components=self.svd_dim, random_state=42)
+            
+            logger.info(f"TF-IDF vectorizer and SVD model initialized (SVD dim={self.svd_dim}, will pad to {self.embedding_dim})")
         except Exception as e:
             logger.error(f"Error initializing TF-IDF vectorizer and SVD model: {str(e)}")
             self.tfidf_vectorizer = None
@@ -86,15 +90,31 @@ class EmbeddingGenerator:
             tfidf_vector = self.tfidf_vectorizer.transform([text])
             
             # Apply SVD to get lower dimensional embedding
-            embedding = self.svd_model.transform(tfidf_vector)
+            embedding = self.svd_model.transform(tfidf_vector)[0]
             
             # Normalize the embedding vector
             norm = np.linalg.norm(embedding)
             if norm > 0:
                 embedding = embedding / norm
             
+            # Pad the embedding to match required dimension (1536 for Pinecone)
+            if len(embedding) < self.embedding_dim:
+                # Create a zero vector of required dimension
+                padded_embedding = np.zeros(self.embedding_dim)
+                
+                # Fill in the actual values
+                padded_embedding[:len(embedding)] = embedding
+                
+                # Re-normalize the padded vector
+                norm = np.linalg.norm(padded_embedding)
+                if norm > 0:
+                    padded_embedding = padded_embedding / norm
+                
+                # Use the padded embedding
+                embedding = padded_embedding
+            
             # Convert to Python list for easier JSON serialization
-            return embedding[0].tolist()
+            return embedding.tolist()
         except Exception as e:
             logger.error(f"Error generating embedding: {str(e)}")
             return None
@@ -118,18 +138,36 @@ class EmbeddingGenerator:
             tfidf_matrix = self.tfidf_vectorizer.transform(texts)
             
             # Apply SVD to get lower dimensional embeddings
-            embeddings = self.svd_model.transform(tfidf_matrix)
+            svd_embeddings = self.svd_model.transform(tfidf_matrix)
             
-            # Normalize the embedding vectors
-            normalized_embeddings = []
-            for embedding in embeddings:
+            # Pad and normalize the embedding vectors
+            final_embeddings = []
+            for embedding in svd_embeddings:
+                # Normalize the SVD embedding
                 norm = np.linalg.norm(embedding)
                 if norm > 0:
-                    normalized_embeddings.append((embedding / norm).tolist())
-                else:
-                    normalized_embeddings.append(embedding.tolist())
+                    embedding = embedding / norm
+                
+                # Pad the embedding to match required dimension (1536 for Pinecone)
+                if len(embedding) < self.embedding_dim:
+                    # Create a zero vector of required dimension
+                    padded_embedding = np.zeros(self.embedding_dim)
+                    
+                    # Fill in the actual values
+                    padded_embedding[:len(embedding)] = embedding
+                    
+                    # Re-normalize the padded vector
+                    norm = np.linalg.norm(padded_embedding)
+                    if norm > 0:
+                        padded_embedding = padded_embedding / norm
+                    
+                    # Use the padded embedding
+                    embedding = padded_embedding
+                
+                # Convert to list and add to results
+                final_embeddings.append(embedding.tolist())
             
-            return normalized_embeddings
+            return final_embeddings
         except Exception as e:
             logger.error(f"Error generating embeddings: {str(e)}")
             return [None] * len(texts)

@@ -25,9 +25,14 @@ try:
     embedding_generator = EmbeddingGenerator(embedding_dim=Config.EMBEDDING_DIMENSION)
     logger.info("Initialized embedding generator with scikit-learn")
     
-    # Initialize in-memory vector store (simulating Pinecone)
-    pinecone_manager = PineconeManager(dimension=Config.EMBEDDING_DIMENSION)
-    logger.info("Initialized in-memory vector store")
+    # Initialize Pinecone manager with actual Pinecone API key
+    pinecone_manager = PineconeManager(
+        api_key=os.environ.get("PINECONE_API_KEY", Config.DEFAULT_PINECONE_API_KEY),
+        environment=Config.PINECONE_ENVIRONMENT,
+        index_name=Config.PINECONE_INDEX_NAME,
+        dimension=Config.EMBEDDING_DIMENSION
+    )
+    logger.info("Initialized Pinecone manager")
     
     # Initialize RAG engine
     rag_engine = RAGEngine(embedding_generator, pinecone_manager)
