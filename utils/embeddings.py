@@ -193,13 +193,15 @@ class EmbeddingGenerator:
         # Now generate embeddings
         embeddings = self.generate_embeddings(texts)
         
+        # Create a list to store documents with embeddings
         embedded_docs = []
+        
+        # Iterate through documents and embeddings together
         for doc, emb in zip(documents, embeddings):
             if emb is not None:
+                # Create a copy of the document to avoid modifying the original
                 doc_copy = doc.copy()
                 doc_copy["embedding"] = emb
                 embedded_docs.append(doc_copy)
-            else:
-                logger.warning(f"Could not generate embedding for document: {doc.get('id', 'unknown')}")
         
         return embedded_docs

@@ -30,6 +30,9 @@ class PineconeManager:
         self.index = None
         self.use_fallback = False
         self._connect()
+        
+        # Store for document metadata
+        self.document_store = {}
     
     def _connect(self):
         """Connect to Pinecone and initialize the index"""
@@ -150,6 +153,15 @@ class PineconeManager:
                     metadata = {k: str(v) for k, v in metadata.items()}
                 
                 vectors.append((vector_id, embedding, metadata))
+                
+                # Store document in document_store for fallback retrieval
+                if self.use_fallback:
+                    self.document_store[vector_id] = {
+                        "id": vector_id,
+                        "embedding": embedding,
+                        "metadata": metadata,
+                        "score": 1.0  # Default score for stored documents
+                    }
             
             # Upsert in batches to avoid request size limits
             batch_size = 100
@@ -199,42 +211,77 @@ class PineconeManager:
         
         try:
             if self.use_fallback:
+                # For in-memory store
+                results = self.index.query(query_vector, top_k=top_k, include_metadata=True)
+                matches = []
+                for match in results['matches']:  # Access the 'matches' key
+                    doc_id = match['id']
+                    if doc_id in self.document_store:
+                        doc = self.document_store[doc_id]
+                        matches.append({
+                            'id': doc_id,
+                            'score': float(match['score']),
+                            'metadata': doc['metadata']
+                        })
+                return matches
+            else:
+                # For Pinecone
                 results = self.index.query(
                     vector=query_vector,
                     top_k=top_k,
                     include_metadata=True
                 )
-                # Format the results
-                matches = results.get('matches', [])
-                return [
-                    {
-                        'id': match['id'],
-                        'score': match['score'],
-                        'metadata': match['metadata']
-                    }
-                    for match in matches
-                ]
-            else:
-                # New Pinecone API
-                response = self.index.query(
-                    vector=query_vector,
-                    top_k=top_k,
-                    include_metadata=True
-                )
                 
-                # Format the results for the new API
                 matches = []
-                for match in response.matches:
+                for match in results.matches:
                     matches.append({
                         'id': match.id,
-                        'score': match.score,
+                        'score': float(match.score),
                         'metadata': match.metadata
                     })
                 return matches
-            
+                
         except Exception as e:
             logger.error(f"Error searching in vector store: {str(e)}")
             return []
+    
+    def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a document by its ID
+        
+        Args:
+            doc_id: The document ID
+            
+        Returns:
+            Document dictionary if found, None otherwise
+        """
+        if not self.is_connected():
+            logger.error("Not connected to vector store, can't retrieve document")
+            return None
+            
+        try:
+            if self.use_fallback:
+                # For in-memory store, get from document_store
+                return self.document_store.get(doc_id)
+            else:
+                # For Pinecone, fetch the vector
+                try:
+                    result = self.index.fetch([doc_id])
+                    if doc_id in result.vectors:
+                        vector_data = result.vectors[doc_id]
+                        return {
+                            "id": doc_id,
+                            "embedding": vector_data.values,
+                            "metadata": vector_data.metadata,
+                            "score": 1.0  # Default score for direct fetches
+                        }
+                except Exception as e:
+                    logger.error(f"Error fetching document from Pinecone: {str(e)}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"Error retrieving document: {str(e)}")
+            return None
 
 
 # Fallback in-memory vector store implementation
@@ -248,53 +295,73 @@ class InMemoryVectorStore:
     
     def upsert(self, vectors):
         """Insert or update vectors in the store"""
-        for id, values, metadata in vectors:
-            self.vectors[id] = [values, metadata]
-        
-        self.vector_count = len(self.vectors)
-        return {'upserted_count': len(vectors)}
+        try:
+            for id, values, metadata in vectors:
+                # Ensure values is a list of floats
+                if isinstance(values, (list, np.ndarray)):
+                    values = [float(v) for v in values]
+                else:
+                    logger.error(f"Invalid vector values type for id {id}: {type(values)}")
+                    continue
+                
+                # Store the vector and metadata
+                self.vectors[id] = [values, metadata]
+            
+            self.vector_count = len(self.vectors)
+            return {'upserted_count': len(vectors)}
+        except Exception as e:
+            logger.error(f"Error in upsert: {str(e)}")
+            return {'upserted_count': 0}
     
     def query(self, vector, top_k=5, include_metadata=True):
         """Query for similar vectors"""
-        if not self.vectors:
+        try:
+            if not self.vectors:
+                return {'matches': []}
+            
+            # Convert the query vector to numpy array
+            query_vector = np.array(vector, dtype=np.float32)
+            
+            # Calculate cosine similarity with all vectors
+            similarities = []
+            for id, (values, metadata) in self.vectors.items():
+                try:
+                    # Convert to numpy array
+                    doc_vector = np.array(values, dtype=np.float32)
+                    
+                    # Calculate cosine similarity
+                    dot_product = np.dot(query_vector, doc_vector)
+                    query_norm = np.linalg.norm(query_vector)
+                    doc_norm = np.linalg.norm(doc_vector)
+                    
+                    if query_norm > 0 and doc_norm > 0:
+                        similarity = dot_product / (query_norm * doc_norm)
+                    else:
+                        similarity = 0
+                    
+                    similarities.append((id, similarity, metadata if include_metadata else None))
+                except Exception as e:
+                    logger.error(f"Error calculating similarity for vector {id}: {str(e)}")
+                    continue
+            
+            # Sort by similarity (descending)
+            similarities.sort(key=lambda x: x[1], reverse=True)
+            
+            # Return top-k results
+            matches = []
+            for id, score, metadata in similarities[:top_k]:
+                match = {
+                    'id': id,
+                    'score': float(score)  # Convert from numpy.float to Python float
+                }
+                if include_metadata:
+                    match['metadata'] = metadata
+                matches.append(match)
+            
+            return {'matches': matches}
+        except Exception as e:
+            logger.error(f"Error in query: {str(e)}")
             return {'matches': []}
-        
-        # Convert the query vector to numpy array
-        query_vector = np.array(vector)
-        
-        # Calculate cosine similarity with all vectors
-        similarities = []
-        for id, (values, metadata) in self.vectors.items():
-            # Convert to numpy array
-            doc_vector = np.array(values)
-            
-            # Calculate cosine similarity
-            dot_product = np.dot(query_vector, doc_vector)
-            query_norm = np.linalg.norm(query_vector)
-            doc_norm = np.linalg.norm(doc_vector)
-            
-            if query_norm > 0 and doc_norm > 0:
-                similarity = dot_product / (query_norm * doc_norm)
-            else:
-                similarity = 0
-            
-            similarities.append((id, similarity, metadata if include_metadata else None))
-        
-        # Sort by similarity (descending)
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        
-        # Return top-k results
-        matches = []
-        for id, score, metadata in similarities[:top_k]:
-            match = {
-                'id': id,
-                'score': float(score)  # Convert from numpy.float to Python float
-            }
-            if include_metadata:
-                match['metadata'] = metadata
-            matches.append(match)
-        
-        return {'matches': matches}
     
     def describe_index_stats(self):
         """Return stats about the index"""

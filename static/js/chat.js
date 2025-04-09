@@ -10,14 +10,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const checkStatusButton = document.getElementById('checkStatus');
     const statusModal = new bootstrap.Modal(document.getElementById('statusModal'));
     const statusModalBody = document.getElementById('statusModalBody');
+    const sendButton = document.getElementById('send-button');
+    const datasetForm = document.getElementById('dataset-form');
+    const indexingProgress = document.getElementById('indexing-progress');
+    const progressBar = indexingProgress.querySelector('.progress-bar');
+    
+    // State
+    let isProcessing = false;
+    let statusCheckInterval = null;
     
     // Add event listeners
     chatForm.addEventListener('submit', handleChatSubmit);
     clearChatButton.addEventListener('click', clearChat);
     checkStatusButton.addEventListener('click', checkSystemStatus);
+    sendButton.addEventListener('click', handleSendMessage);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            handleSendMessage();
+        }
+    });
+    datasetForm.addEventListener('submit', handleDatasetLoad);
     
     // Check system status on page load
     checkSystemStatus(false);
+    
+    // Initialize status check
+    checkStatus();
+    statusCheckInterval = setInterval(checkStatus, 5000);
     
     /**
      * Handle chat form submission
@@ -27,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         
         const userMessage = userInput.value.trim();
-        if (!userMessage) return;
+        if (!userMessage || isProcessing) return;
         
         // Display user message
         appendMessage('user', userMessage);
@@ -315,4 +334,286 @@ document.addEventListener('DOMContentLoaded', function() {
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     }
+
+    // Handle sending messages
+    async function handleSendMessage() {
+        const message = userInput.value.trim();
+        if (!message || isProcessing) return;
+        
+        // Add user message to chat
+        addMessage(message, 'user');
+        userInput.value = '';
+        isProcessing = true;
+        
+        try {
+            // Send message to backend
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query: message })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Add bot response to chat
+                addMessage(data.response, 'bot', data.sources);
+            } else {
+                // Show error message
+                addMessage(`Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addMessage('Error: Failed to send message. Please try again.', 'error');
+        } finally {
+            isProcessing = false;
+        }
+    }
+
+    // Handle dataset loading
+    async function handleDatasetLoad(event) {
+        event.preventDefault();
+        
+        const datasetPath = document.getElementById('dataset-path').value.trim();
+        if (!datasetPath) {
+            showError('Please enter a dataset path');
+            return;
+        }
+        
+        try {
+            // Show progress bar
+            indexingProgress.classList.remove('d-none');
+            progressBar.style.width = '0%';
+            progressBar.textContent = 'Starting...';
+            
+            // Send request to backend
+            const response = await fetch('/api/index_dataset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ dataset_path: datasetPath })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Show success message
+                progressBar.style.width = '100%';
+                progressBar.textContent = 'Complete!';
+                setTimeout(() => {
+                    indexingProgress.classList.add('d-none');
+                    showSuccess('Dataset loaded successfully!');
+                }, 2000);
+            } else {
+                // Show error message
+                indexingProgress.classList.add('d-none');
+                showError(data.error);
+            }
+        } catch (error) {
+            console.error('Error loading dataset:', error);
+            indexingProgress.classList.add('d-none');
+            showError('Failed to load dataset. Please try again.');
+        }
+    }
+
+    // Check system status
+    async function checkStatus() {
+        try {
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            
+            if (response.ok) {
+                updateStatusDisplay(data);
+                updateIndexingProgress(data.indexing_progress);
+            } else {
+                console.error('Error checking status:', data.error);
+            }
+        } catch (error) {
+            console.error('Error checking status:', error);
+        }
+    }
+
+    // Update status display
+    function updateStatusDisplay(status) {
+        const statusContent = document.getElementById('status-content');
+        
+        let html = '<div class="list-group">';
+        
+        // Embedding Generator Status
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-brain me-2"></i>
+                        Embedding Generator
+                    </div>
+                    <span class="badge ${status.embedding_generator ? 'bg-success' : 'bg-danger'}">
+                        ${status.embedding_generator ? 'Ready' : 'Not Ready'}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        // Pinecone Manager Status
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-database me-2"></i>
+                        Vector Store
+                    </div>
+                    <span class="badge ${status.pinecone_manager ? 'bg-success' : 'bg-warning'}">
+                        ${status.pinecone_manager ? 'Connected' : 'Using Memory Store'}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        // Index Status
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-box me-2"></i>
+                        Knowledge Base
+                    </div>
+                    <span class="badge ${status.index_populated ? 'bg-success' : 'bg-warning'}">
+                        ${status.index_populated ? 'Populated' : 'Empty'}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        html += '</div>';
+        statusContent.innerHTML = html;
+    }
+
+    // Update indexing progress
+    function updateIndexingProgress(progress) {
+        if (progress.is_indexing) {
+            indexingProgress.classList.remove('d-none');
+            const percentage = (progress.processed_documents / progress.total_documents) * 100;
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${progress.processed_documents.toLocaleString()} / ${progress.total_documents.toLocaleString()} documents`;
+        } else if (progress.processed_documents > 0) {
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Complete!';
+            setTimeout(() => {
+                indexingProgress.classList.add('d-none');
+            }, 2000);
+        }
+    }
+
+    // Add message to chat
+    function addMessage(message, type, sources = null) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message`;
+        
+        let html = `
+            <div class="message-content">
+                <div class="message-text">${escapeHtml(message)}</div>
+        `;
+        
+        if (sources && sources.length > 0) {
+            html += `
+                <div class="sources">
+                    <div class="sources-header">Sources:</div>
+                    <div class="sources-list">
+            `;
+            
+            sources.forEach(source => {
+                html += `
+                    <div class="source-item">
+                        <div class="source-title">${escapeHtml(source.title || 'Untitled')}</div>
+                        <div class="source-content">${escapeHtml(source.content)}</div>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        messageDiv.innerHTML = html;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Show error message
+    function showError(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-white bg-danger border-0';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+
+    // Show success message
+    function showSuccess(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-white bg-success border-0';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check-circle me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+
+    // Escape HTML to prevent XSS
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+        }
+    });
 });
